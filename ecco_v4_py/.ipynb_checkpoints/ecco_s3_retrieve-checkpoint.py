@@ -18,7 +18,6 @@ from urllib import request
 from http.cookiejar import CookieJar
 from getpass import getpass
 import requests
-import zarr
     
 
 def setup_earthdata_login_auth(url: str='urs.earthdata.nasa.gov'):
@@ -118,7 +117,7 @@ def ecco_podaac_s3_query(ShortName,StartDate,EndDate,version,snapshot_interval='
             response = get_results(params=params)
             if 'feed' in response.keys():
                 for curr_entry in response['feed']['entry']:
-                    time_start = np.append(time_start,np.datetime64(curr_entry['time_start'][:-1],'ns'))
+                    time_start = np.append(time_start,np.datetime64(curr_entry['time_start'],'ns'))
                     for curr_link in curr_entry['links']:
                         if "direct download access via S3" in curr_link['title']:
                             s3_files_list.append(curr_link['href'])
@@ -131,7 +130,7 @@ def ecco_podaac_s3_query(ShortName,StartDate,EndDate,version,snapshot_interval='
             else:
                 # do another CMR search since previous search hit the allowed maximum
                 # number of entries (2000)
-                params['temporal'] = str(np.datetime64(response['feed']['entry'][-1]['time_end'][:-1],'D')\
+                params['temporal'] = str(np.datetime64(response['feed']['entry'][-1]['time_end'],'D')\
                                          + np.timedelta64(1,'D'))+params['temporal'][10:]
 
         # reduce granule list to single day if only one day in requested range
@@ -143,16 +142,13 @@ def ecco_podaac_s3_query(ShortName,StartDate,EndDate,version,snapshot_interval='
         return s3_files_list
     
     
-    
     def get_granules_ecco_bucket(StartDate: str, EndDate: str,\
                                    ShortName: str, version: str, SingleDay_flag: bool):
         import s3fs
         
         # find all granules in the dataset identified by ShortName
         s3 = s3fs.S3FileSystem(anon=False,\
-                               requester_pays=True,\
-                               asynchronous=False)
-
+                               requester_pays=True)
         if version == 'v4r5':
             if 'LLC0090GRID' in ShortName:
                 gridtime_id = 'native/'
@@ -175,16 +171,10 @@ def ecco_podaac_s3_query(ShortName,StartDate,EndDate,version,snapshot_interval='
         sorted_ind = np.argsort(s3_files_all_dates)
         s3_files_all_dates = s3_files_all_dates[sorted_ind]
         
-        if 'MONTHLY' in ShortName:
-            in_range_ind = np.logical_and(\
-                             s3_files_all_dates >= np.datetime64(StartDate,'M'),\
-                             s3_files_all_dates < np.datetime64(EndDate,'M') + np.timedelta64(1,'M'))\
-                             .nonzero()[0]
-        else:
-            in_range_ind = np.logical_and(\
-                             s3_files_all_dates >= np.datetime64(StartDate,'D'),\
-                             s3_files_all_dates < np.datetime64(EndDate,'D') + np.timedelta64(1,'D'))\
-                             .nonzero()[0]
+        in_range_ind = np.logical_and(\
+                         s3_files_all_dates >= np.datetime64(StartDate,'D'),\
+                         s3_files_all_dates <= np.datetime64(EndDate,'D'))\
+                         .nonzero()[0]
         s3_files_list = [s3_files_all[sorted_ind[ind]] for ind in in_range_ind]
 
         # reduce granule list to single day if only one day in requested range
@@ -268,7 +258,7 @@ def init_S3FileSystem(version):
     import s3fs
     
     if version == 'v4r5':
-        s3 = s3fs.S3FileSystem(anon=False,requester_pays=True,asynchronous=False)
+        s3 = s3fs.S3FileSystem(anon=False,requester_pays=True)
     else:
         creds = requests.get('https://archive.podaac.earthdata.nasa.gov/s3credentials').json()
         s3 = s3fs.S3FileSystem(anon=False,
@@ -512,7 +502,7 @@ def ecco_podaac_s3_open_fsspec(ShortName,version,jsons_root_dir=None,jsons_retri
 
     Returns
     -------
-    zstore: zarr.storage.FsspecStore, can be passed directly to xarray.open_dataset 
+    fsmap_obj: fsspec.mapping.FSMap object, can be passed directly to xarray.open_dataset 
                (with engine='zarr')
     
     """
@@ -521,7 +511,7 @@ def ecco_podaac_s3_open_fsspec(ShortName,version,jsons_root_dir=None,jsons_retri
     
     import glob
     import fsspec
-    import zarr
+    
     
     # identify name of target json and local directory
     shortname_split = ShortName.split('_')
@@ -579,8 +569,7 @@ def ecco_podaac_s3_open_fsspec(ShortName,version,jsons_root_dir=None,jsons_retri
             if option_proceed.casefold() != 'y':
                 raise Exception("Request canceled; no data transferred.")
         s3 = s3fs.S3FileSystem(anon=False,\
-                               requester_pays=True,\
-                               asynchronous=False)
+                               requester_pays=True)
          
         if version == 'v4r4':
             json_s3_subdir = "s3://ecco-model-granules/V4r4/mzz_jsons/" + json_subdir
@@ -603,8 +592,7 @@ def ecco_podaac_s3_open_fsspec(ShortName,version,jsons_root_dir=None,jsons_retri
                     fo=json_file,\
                     remote_protocol="s3", 
                     remote_options={"anon":False,\
-                                    "requester_pays":True},\
-                    asynchronous=True)
+                                    "requester_pays":True})
     else:
         # get NASA Earthdata credentials for S3
         creds = requests.get('https://archive.podaac.earthdata.nasa.gov/s3credentials').json()
@@ -617,13 +605,12 @@ def ecco_podaac_s3_open_fsspec(ShortName,version,jsons_root_dir=None,jsons_retri
                     remote_options={"anon":False,\
                                     "key":creds['accessKeyId'],
                                     "secret":creds['secretAccessKey'], 
-                                    "token":creds['sessionToken']},\
-                    asynchronous=True)
+                                    "token":creds['sessionToken']})
     
-    zstore = zarr.storage.FsspecStore(fs,path="")
+    fs.asynchronous = True
+    fsmap_obj = zarr.storage.FsspecStore(fs)
     
-    
-    return zstore
+    return fsmap_obj
 
 
 
