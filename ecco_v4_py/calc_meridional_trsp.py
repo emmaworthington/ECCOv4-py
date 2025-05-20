@@ -21,8 +21,10 @@ WATTS_TO_PETAWATTS = 10**-15
 RHO_CONST = 1029
 HEAT_CAPACITY = 4000
 
-def calc_meridional_vol_trsp(ds,lat_vals,
-                             basin_name=None,coords=None,grid=None):
+def calc_meridional_vol_trsp(ds, lat_vals,
+                             basin_name=None,
+                             coords=None,
+                             grid=None):
     """Compute volumetric transport across latitude band in Sverdrups
 
     Parameters

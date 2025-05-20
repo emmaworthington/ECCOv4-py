@@ -12,8 +12,8 @@ from .calc_section_trsp import _parse_section_trsp_inputs, section_trsp_at_depth
 # Define constants
 METERS_CUBED_TO_SVERDRUPS = 10**-6
 
-def calc_meridional_stf(ds,lat_vals,doFlip=True,
-                        basin_name=None,coords=None,grid=None):
+def calc_meridional_stf(ds, lat_vals, doFlip=True,
+                        basin_name=None, coords=None, grid=None):
     """Compute the meridional overturning streamfunction in Sverdrups
     at specified latitude(s)
 
@@ -71,13 +71,13 @@ def calc_meridional_stf(ds,lat_vals,doFlip=True,
 
     # Flip depth dimension, take cumulative sum, flip back
     if doFlip:
-        psi_moc = psi_moc.isel(k=slice(None,None,-1))
+        psi_moc = psi_moc.isel(k=slice(None, None, -1))
 
     # Should this be done with a grid object???
     psi_moc = psi_moc.cumsum(dim='k')
 
     if doFlip:
-        psi_moc = -1 * psi_moc.isel(k=slice(None,None,-1))
+        psi_moc = -1 * psi_moc.isel(k=slice(None, None, -1))
 
     # Add to dataset
     ds_out['psi_moc'] = psi_moc
