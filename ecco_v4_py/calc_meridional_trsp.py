@@ -84,8 +84,10 @@ def calc_meridional_vol_trsp(ds, lat_vals,
     return ds_out
 
 
-def calc_meridional_heat_trsp(ds,lat_vals,
-                              basin_name=None,coords=None,grid=None):
+def calc_meridional_heat_trsp(ds, lat_vals,
+                              basin_name=None,
+                              coords=None,
+                              grid=None):
     """Compute heat transport across latitude band in Petwatts
     see calc_meridional_vol_trsp for argument documentation.
     The only differences are:
@@ -246,6 +248,88 @@ def meridional_trsp_at_depth(xfld, yfld, lat_vals, coords,
 
         # Compute mask for particular latitude band
         lat_maskW, lat_maskS = vector_calc.get_latitude_masks(lat, coords['YC'], grid)
+
+        # Sum horizontally
+        lat_trsp_x = (tmp_x * lat_maskW).sum(dim=['i_g','j','tile'])
+        lat_trsp_y = (tmp_y * lat_maskS).sum(dim=['i','j_g','tile'])
+
+        ds_out['trsp_z'].loc[{'lat':lat}] = lat_trsp_x + lat_trsp_y
+
+    return ds_out
+
+
+def meridional_trsp_at_density(xfld, yfld, rho_anom, lat_vals, coords,
+                               basin_name=None, grid=None, less_output=True):
+    """
+    Compute transport of vector quantity at each density level
+    across latitude(s) defined in lat_vals
+
+    Parameters
+    ----------
+    xfld, yfld : xarray DataArray
+        3D spatial (+ time, optional) field at west and south grid cell edges
+    lat_vals : float or list
+        latitude value(s) specifying where to compute transport
+    coords : xarray Dataset
+        only needs YC, and optionally maskW, maskS (defining wet points)
+    basin_name : string, optional
+        denote ocean basin over which to compute streamfunction
+        If not specified, compute global quantity
+        see get_basin.get_available_basin_names for options
+    grid : xgcm Grid object, optional
+        denotes LLC90 operations for xgcm, see ecco_utils.get_llc_grid
+        see also the [xgcm documentation](https://xgcm.readthedocs.io/en/latest/grid_topology.html)
+
+    Returns
+    -------
+    ds_out : xarray Dataset
+        with the main variable
+            'trsp_z'
+                transport of vector quantity across denoted latitude band at
+                each depth level with dimensions 'time' (if in given dataset),
+                'k' (depth), and 'lat'
+    """
+
+    if grid is None:
+        grid = get_llc_grid(coords)
+
+    # Initialize empty DataArray with coordinates and dims
+    ds_out = _initialize_trsp_data_array(coords, lat_vals)
+
+    # Get basin mask
+    maskW = coords['maskW'] if 'maskW' in coords else xr.ones_like(xfld)
+    maskS = coords['maskS'] if 'maskS' in coords else xr.ones_like(yfld)
+    
+    if basin_name is not None:
+        maskW = get_basin_mask(basin_name, maskW)
+        maskS = get_basin_mask(basin_name, maskS)
+
+    # These sums are the same for all lats, therefore precompute to save
+    # time
+    tmp_x = xfld.where(maskW)
+    tmp_y = yfld.where(maskS)
+    
+    rho_bins = np.arange(-12.0, 26.0, 0.1)
+    rho_idx = (rho_bins[1:] + rho_bins[0:-1]) / 2
+    
+    # Create an empty array for the transport in density bins
+    rho_trsp = np.full(tmp_x.shape, fill_value=np.nan)
+
+    for lat in ds_out.lat.values:
+        if not less_output:
+            print ('calculating transport for latitutde ', lat)
+
+        # Compute mask for particular latitude band
+        lat_maskW, lat_maskS = vector_calc.get_latitude_masks(lat, coords['YC'], grid)
+        
+        # Mask volume transports for latitude
+        lat_trsp_x = tmp_x * lat_maskW
+        lat_trsp_y = tmp_y * lat_maskS
+        
+        # Interpolate density anomaly over j_g grid
+        rho_anom_interp = rho_anom.interp(j=lat_trsp_y.j_g)
+        
+        # Loop through time, tile
 
         # Sum horizontally
         lat_trsp_x = (tmp_x * lat_maskW).sum(dim=['i_g','j','tile'])
