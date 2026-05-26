@@ -1,12 +1,12 @@
 from .calc_meridional_trsp import calc_meridional_vol_trsp, \
         calc_meridional_heat_trsp, calc_meridional_salt_trsp, \
-        meridional_trsp_at_depth, meridional_trsp_at_density
+        meridional_trsp_at_depth
 
 from .calc_section_trsp import calc_section_vol_trsp, \
         calc_section_heat_trsp, calc_section_salt_trsp, \
         section_trsp_at_depth
 
-from .calc_stf import calc_meridional_stf, calc_meridional_stf_density, calc_section_stf
+from .calc_stf import calc_meridional_stf, calc_section_stf
 
 from .ecco_utils import make_time_bounds_and_center_times_from_ecco_dataset
 from .ecco_utils import make_time_bounds_from_ds64
